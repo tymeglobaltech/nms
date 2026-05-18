@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:nms.tymeglobal.com)",
+      "Bash(curl -k -s \"https://nms.tymeglobal.com/\")",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\me\\\\Downloads\\\\Projects\\\\WakeUpCall\" | Where-Object { $_.Name -ne \"node_modules\" } | Select-Object Name, LastWriteTime)",
+      "Bash(curl -k -s \"https://nms.tymeglobal.com/index.php/operators\")",
+      "Bash(curl -k -s \"https://nms.tymeglobal.com/index.php/routers\")",
+      "Bash(curl -k -s \"https://nms.tymeglobal.com/index.php/servers\")",
+      "Bash(curl -k -s \"https://nms.tymeglobal.com/index.php/tools\")",
+      "Bash(curl -k -s \"https://nms.tymeglobal.com/index.php/maintenance\")",
+      "Bash(npm install *)",
+      "Bash(node server.js)",
+      "Bash(curl -s http://localhost:3000/api/pages)",
+      "Bash(python3 -c \"import sys,json; pages=json.load\\(sys.stdin\\); print\\(f'Pages: {len\\(pages\\)}'\\); [print\\(f'  {p[\\\\\"title\\\\\"]}: {sum\\(len\\(s[\\\\\"rows\\\\\"]\\) for s in p[\\\\\"sections\\\\\"]\\)} rows'\\) for p in pages]\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"admin\",\"password\":\"NMS2024!\"}')",
+      "Bash(python3 -c \"import sys,json; pages=json.load\\(sys.stdin\\); print\\(f'Admin pages: {len\\(pages\\)}'\\)\")",
+      "Bash(node *)",
+      "Bash(pkill -f \"node server.js\")",
+      "Bash(python3 -c \"import sys,json; pages=json.load\\(sys.stdin\\); vg=[p for p in pages if p['slug']=='voice-gates'][0]; [print\\(s['columnHeaders']\\) for s in vg['sections']]\")",
+      "Bash(npx kill-port *)",
+      "Bash(curl -s http://localhost:3005/api/pages)",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}

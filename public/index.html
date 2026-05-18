@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TymeGlobal NMS</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" href="/favicon.ico" />
+  <!-- Prevent flash of wrong theme: apply saved theme before paint -->
+  <script>
+    (function() {
+      var t = localStorage.getItem('nms_dark');
+      var dark = t !== null ? t === '1' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+  </script>
+</head>
+<body>
+
+<header id="site-header">
+  <img src="/tgt-logo.png" alt="TymeGlobal" onerror="this.style.display='none'" />
+  <h1>TymeGlobal NMS</h1>
+  <span class="spacer"></span>
+  <a href="/admin.html" id="admin-link" style="display:none">Admin</a>
+  <button id="dark-toggle" onclick="toggleDarkMode()" title="Toggle dark mode">☾</button>
+  <button id="login-btn" onclick="openLogin()">Login</button>
+</header>
+
+<nav id="site-nav"></nav>
+
+<main id="content">
+  <p style="color:var(--text-light);padding:20px;">Loading&hellip;</p>
+</main>
+
+<!-- Login overlay -->
+<div id="login-overlay">
+  <div class="login-box">
+    <h2>Sign in</h2>
+    <form id="login-form">
+      <label for="login-user">Username</label>
+      <input id="login-user" type="text" autocomplete="username" required />
+      <label for="login-pass">Password</label>
+      <input id="login-pass" type="password" autocomplete="current-password" required />
+      <button class="btn-primary" type="submit">Sign in</button>
+      <div class="error" id="login-error"></div>
+    </form>
+    <div class="divider">— or —</div>
+    <button id="google-btn" class="google-btn" style="display:none">Sign in with Google</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

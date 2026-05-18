@@ -1,0 +1,12 @@
+services:
+  nms:
+    build: .
+    ports:
+      - "3005:3005"
+    volumes:
+      - ./data.json:/app/data.json
+    environment:
+      - PORT=3005
+      - JWT_SECRET=change-this-in-production
+      # - GOOGLE_CLIENT_ID=your-google-client-id
+    restart: unless-stopped

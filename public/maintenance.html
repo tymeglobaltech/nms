@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planned Maintenance — TymeGlobal NMS</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    body { background: #fff; }
+    #content { padding: 16px; max-width: 100%; }
+    h2 { color: var(--teal); margin-bottom: 16px; font-size: 16px; }
+  </style>
+</head>
+<body>
+<main id="content">
+  <h2>Planned Maintenance</h2>
+  <div id="maint-content"><p style="color:#999">Loading&hellip;</p></div>
+</main>
+<script>
+async function load() {
+  const res = await fetch('/api/pages');
+  const pages = await res.json();
+  const page = pages.find(p => p.slug === 'maintenance');
+  if (!page) return;
+  const el = document.getElementById('maint-content');
+  el.innerHTML = '';
+  page.sections.forEach(section => {
+    const table = document.createElement('table');
+    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
+    const thead = document.createElement('thead');
+    const hrow = document.createElement('tr');
+    section.columnHeaders.forEach(h => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      th.style.cssText = 'background:#1a6c78;color:#fff;padding:8px 12px;text-align:left;';
+      hrow.appendChild(th);
+    });
+    thead.appendChild(hrow);
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    section.rows.forEach((row, ri) => {
+      const tr = document.createElement('tr');
+      tr.style.background = ri % 2 === 0 ? '#fff' : '#f7fbfc';
+      section.columnHeaders.forEach((_, i) => {
+        const cell = row.cells[i] || { label: '', url: '' };
+        const td = document.createElement('td');
+        td.style.cssText = 'padding:7px 12px;border-bottom:1px solid #d5e8ec;';
+        if (cell.label && cell.url) {
+          const a = document.createElement('a');
+          a.href = cell.url; a.textContent = cell.label;
+          a.target = '_blank'; td.appendChild(a);
+        } else {
+          td.textContent = cell.label || '';
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    if (section.rows.length === 0) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = section.columnHeaders.length;
+      td.textContent = 'No scheduled maintenance.';
+      td.style.cssText = 'padding:12px;color:#999;font-style:italic;';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    el.appendChild(table);
+  });
+}
+load();
+</script>
+</body>
+</html>
