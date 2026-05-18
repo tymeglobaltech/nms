@@ -284,6 +284,18 @@ document.getElementById('login-form').addEventListener('submit', async e => {
 
 function openLogin() {
   document.getElementById('login-overlay').classList.add('open');
+  if (window._googleReady && !window._googleButtonRendered) {
+    const container = document.getElementById('google-btn');
+    google.accounts.id.renderButton(container, {
+      type: 'standard',
+      shape: 'rectangular',
+      theme: 'outline',
+      text: 'signin_with',
+      size: 'large',
+      width: 268
+    });
+    window._googleButtonRendered = true;
+  }
 }
 function closeLogin() {
   document.getElementById('login-overlay').classList.remove('open');
@@ -298,40 +310,38 @@ document.getElementById('login-overlay').addEventListener('click', e => {
 // ---------------------------------------------------------------------------
 
 function setupGoogle(clientId) {
+  window._googleClientId = clientId;
   const script = document.createElement('script');
   script.src = 'https://accounts.google.com/gsi/client';
   script.async = true;
   script.defer = true;
+  script.onload = () => {
+    google.accounts.id.initialize({
+      client_id: window._googleClientId,
+      callback: googleCredentialCallback
+    });
+    window._googleReady = true;
+    // Show the container so openLogin() knows to render the button
+    document.getElementById('google-btn').style.display = 'block';
+  };
   document.head.appendChild(script);
-  window._googleClientId = clientId;
-  document.getElementById('google-btn').style.display = 'block';
 }
 
-document.getElementById('google-btn').addEventListener('click', () => {
-  if (!window.google || !window._googleClientId) {
-    showToast('Google SSO not available', true);
-    return;
+async function googleCredentialCallback({ credential }) {
+  try {
+    const data = await apiFetch('/api/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential })
+    });
+    authToken = data.token;
+    sessionStorage.setItem('nms_token', authToken);
+    closeLogin();
+    showToast('Logged in via Google as ' + data.username);
+    document.getElementById('admin-link').style.display = 'inline-block';
+  } catch (err) {
+    document.getElementById('login-error').textContent = err.message;
   }
-  google.accounts.id.initialize({
-    client_id: window._googleClientId,
-    callback: async ({ credential }) => {
-      try {
-        const data = await apiFetch('/api/auth/google', {
-          method: 'POST',
-          body: JSON.stringify({ credential })
-        });
-        authToken = data.token;
-        sessionStorage.setItem('nms_token', authToken);
-        closeLogin();
-        showToast('Logged in via Google as ' + data.username);
-        document.getElementById('admin-link').style.display = 'inline-block';
-      } catch (err) {
-        document.getElementById('login-error').textContent = err.message;
-      }
-    }
-  });
-  google.accounts.id.prompt();
-});
+}
 
 // ---------------------------------------------------------------------------
 // Toast
