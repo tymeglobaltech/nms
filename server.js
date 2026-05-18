@@ -165,18 +165,10 @@ app.post('/api/auth/google', async (req, res) => {
     }
 
     const data = readData();
-    let user = data.users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
+    const user = data.users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
 
     if (!user) {
-      user = {
-        id: generateId(),
-        username: email.split('@')[0],
-        email: email.toLowerCase(),
-        passwordHash: '',
-        role: 'admin'
-      };
-      data.users.push(user);
-      writeData(data);
+      return res.status(403).json({ error: 'No account found for ' + email + '. Ask an admin to add you first.' });
     }
 
     const token = jwt.sign(
