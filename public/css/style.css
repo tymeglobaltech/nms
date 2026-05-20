@@ -256,6 +256,7 @@ body {
 
 .section-block table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   background: var(--white);
   border-radius: 14px;
