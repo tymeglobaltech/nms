@@ -195,7 +195,7 @@ function renderSections(page) {
     return;
   }
   const sorted = [...page.sections].sort((a, b) => a.order - b.order);
-  sorted.forEach(section => {
+  sorted.forEach((section, si) => {
     const acc = document.createElement('div');
     acc.className = 'section-accordion';
     acc.id = 'section-' + section.id;
@@ -203,8 +203,13 @@ function renderSections(page) {
     const headerTitle = section.columnHeaders.filter(h => h).join(' | ') || '(Untitled section)';
     acc.innerHTML = `
       <div class="sa-header" onclick="toggleSection('${section.id}')">
+        <div class="sa-order-btns" onclick="event.stopPropagation()">
+          <button class="order-btn" title="Move section up" ${si === 0 ? 'disabled' : ''} onclick="moveSection('${page.id}','${section.id}',-1)">▲</button>
+          <button class="order-btn" title="Move section down" ${si === sorted.length - 1 ? 'disabled' : ''} onclick="moveSection('${page.id}','${section.id}',1)">▼</button>
+        </div>
         <h4>${escHtml(headerTitle)}</h4>
         <span class="badge badge-teal">${section.rows.length} rows</span>
+        ${section.autoSort ? '<span class="badge badge-orange">A–Z</span>' : ''}
         <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteSection('${page.id}','${section.id}')">Delete</button>
         <span class="sa-toggle">▼</span>
       </div>
@@ -217,6 +222,9 @@ function renderSections(page) {
           <label>Section title (optional label shown above headers)</label>
           <input type="text" id="st-${section.id}" value="${escHtml(section.title || '')}" />
         </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;text-transform:none;letter-spacing:0;margin-bottom:14px;">
+          <input type="checkbox" id="sa-${section.id}" ${section.autoSort ? 'checked' : ''} /> Auto-order rows alphabetically (A–Z by first column)
+        </label>
         <div style="display:flex;gap:8px;margin-bottom:14px;">
           <button class="btn btn-primary btn-sm" onclick="saveSection('${page.id}','${section.id}')">Save section</button>
         </div>
@@ -241,12 +249,26 @@ function renderRows(section, pageId) {
   const container = document.getElementById('rows-' + section.id);
   if (!container) return;
   container.innerHTML = '';
-  if (section.rows.length === 0) {
-    container.innerHTML = '<p class="no-items">No rows yet.</p>';
+  const autoSort = !!section.autoSort;
+  let rows = section.rows;
+  if (autoSort) {
+    rows = [...rows].sort((a, b) => {
+      const la = ((a.cells[0] && a.cells[0].label) || '').toLowerCase();
+      const lb = ((b.cells[0] && b.cells[0].label) || '').toLowerCase();
+      return la.localeCompare(lb);
+    });
+    const note = document.createElement('p');
+    note.className = 'no-items';
+    note.style.marginBottom = '8px';
+    note.textContent = 'Rows are ordered automatically, A–Z by the first column.';
+    container.appendChild(note);
+  }
+  if (rows.length === 0) {
+    container.innerHTML += '<p class="no-items">No rows yet.</p>';
     return;
   }
   const colCount = section.columnHeaders.length;
-  section.rows.forEach((row, ri) => {
+  rows.forEach((row, ri) => {
     const rowEl = document.createElement('div');
     rowEl.className = 'row-item';
     rowEl.id = 'row-' + row.id;
@@ -265,7 +287,15 @@ function renderRows(section, pageId) {
     }
     cellsHtml += '</div>';
 
+    const orderControls = autoSort ? '' : `
+      <div class="row-order-btns">
+        <button class="order-btn" title="Move row up" ${ri === 0 ? 'disabled' : ''} onclick="moveRow('${pageId}','${section.id}','${row.id}',-1)">▲</button>
+        <button class="order-btn" title="Move row down" ${ri === rows.length - 1 ? 'disabled' : ''} onclick="moveRow('${pageId}','${section.id}','${row.id}',1)">▼</button>
+        <button class="order-btn" title="Insert new row below this one" onclick="addRow('${pageId}','${section.id}',${colCount},'${row.id}')">+</button>
+      </div>`;
+
     rowEl.innerHTML = `
+      ${orderControls}
       ${cellsHtml}
       <div style="display:flex;flex-direction:column;gap:4px;">
         <button class="btn btn-primary btn-sm" onclick="saveRow('${pageId}','${section.id}','${row.id}',${colCount})">Save</button>
@@ -345,14 +375,18 @@ async function addSection() {
   openModal('Add section', `
     <div class="form-group"><label>Column headers (one per line)</label><textarea id="ms-headers" rows="3" placeholder="Column 1\nColumn 2"></textarea></div>
     <div class="form-group"><label>Optional section title</label><input type="text" id="ms-title" /></div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:8px;text-transform:none;letter-spacing:0;">
+      <input type="checkbox" id="ms-autosort" /> Auto-order rows alphabetically (A–Z)
+    </label>
   `, async () => {
     const raw = document.getElementById('ms-headers').value;
     const columnHeaders = raw.split('\n').map(h => h.trim());
     const title = document.getElementById('ms-title').value.trim();
+    const autoSort = document.getElementById('ms-autosort').checked;
     try {
       await api(`/api/admin/pages/${currentPageId}/sections`, {
         method: 'POST',
-        body: JSON.stringify({ columnHeaders, title, order: maxOrder + 1 })
+        body: JSON.stringify({ columnHeaders, title, order: maxOrder + 1, autoSort })
       });
       await loadPages();
       closeModal();
@@ -366,14 +400,38 @@ async function saveSection(pageId, sectionId) {
   const raw = document.getElementById('sh-' + sectionId).value;
   const columnHeaders = raw.split('\n').map(h => h.trim());
   const title = document.getElementById('st-' + sectionId).value.trim();
+  const autoSort = document.getElementById('sa-' + sectionId).checked;
   try {
     await api(`/api/admin/pages/${pageId}/sections/${sectionId}`, {
       method: 'PUT',
-      body: JSON.stringify({ columnHeaders, title })
+      body: JSON.stringify({ columnHeaders, title, autoSort })
     });
     await loadPages();
     selectPage(pageId);
+    setTimeout(() => {
+      const el = document.getElementById('section-' + sectionId);
+      if (el) el.classList.add('open');
+    }, 50);
     toast('Section saved');
+  } catch (e) { toast(e.message, true); }
+}
+
+async function moveSection(pageId, sectionId, direction) {
+  const page = pages.find(p => p.id === pageId);
+  if (!page) return;
+  const sorted = [...page.sections].sort((a, b) => a.order - b.order);
+  const ids = sorted.map(s => s.id);
+  const idx = ids.indexOf(sectionId);
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= ids.length) return;
+  [ids[idx], ids[newIdx]] = [ids[newIdx], ids[idx]];
+  try {
+    await api(`/api/admin/pages/${pageId}/sections/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify({ orderedIds: ids })
+    });
+    await loadPages();
+    selectPage(pageId);
   } catch (e) { toast(e.message, true); }
 }
 
@@ -391,12 +449,14 @@ async function deleteSection(pageId, sectionId) {
 // CRUD — Rows
 // ---------------------------------------------------------------------------
 
-async function addRow(pageId, sectionId, colCount) {
+async function addRow(pageId, sectionId, colCount, insertAfter) {
   const cells = Array.from({ length: colCount }, () => ({ label: '', url: '' }));
+  const body = { cells };
+  if (insertAfter) body.insertAfter = insertAfter;
   try {
     await api(`/api/admin/pages/${pageId}/sections/${sectionId}/rows`, {
       method: 'POST',
-      body: JSON.stringify({ cells })
+      body: JSON.stringify(body)
     });
     await loadPages();
     selectPage(pageId);
@@ -406,6 +466,29 @@ async function addRow(pageId, sectionId, colCount) {
       if (el) el.classList.add('open');
     }, 50);
     toast('Row added');
+  } catch (e) { toast(e.message, true); }
+}
+
+async function moveRow(pageId, sectionId, rowId, direction) {
+  const page = pages.find(p => p.id === pageId);
+  const section = page && (page.sections || []).find(s => s.id === sectionId);
+  if (!section) return;
+  const ids = section.rows.map(r => r.id);
+  const idx = ids.indexOf(rowId);
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= ids.length) return;
+  [ids[idx], ids[newIdx]] = [ids[newIdx], ids[idx]];
+  try {
+    await api(`/api/admin/pages/${pageId}/sections/${sectionId}/rows/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify({ orderedIds: ids })
+    });
+    await loadPages();
+    selectPage(pageId);
+    setTimeout(() => {
+      const el = document.getElementById('section-' + sectionId);
+      if (el) el.classList.add('open');
+    }, 50);
   } catch (e) { toast(e.message, true); }
 }
 

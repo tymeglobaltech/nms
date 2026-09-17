@@ -281,6 +281,30 @@ label {
 .row-item .cell-pair input { margin-bottom: 4px; }
 .row-item .cell-pair label { font-size: 10px; }
 
+/* ── Order controls ── */
+.sa-order-btns, .row-order-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.order-btn {
+  width: 22px;
+  height: 18px;
+  border: 1px solid rgba(14,165,233,0.35);
+  background: #fff;
+  color: var(--teal-dark);
+  border-radius: 4px;
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.order-btn:hover:not(:disabled) { background: var(--teal-light); border-color: var(--teal); }
+.order-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
 /* ── Modal ── */
 .modal-overlay {
   display: none;

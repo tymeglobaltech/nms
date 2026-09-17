@@ -48,6 +48,16 @@ function sanitizeUrl(url) {
   return (t.startsWith('http://') || t.startsWith('https://')) ? t : '';
 }
 
+function orderedRows(section) {
+  const rows = section.rows || [];
+  if (!section.autoSort) return rows;
+  return [...rows].sort((a, b) => {
+    const la = ((a.cells[0] && a.cells[0].label) || '').toLowerCase();
+    const lb = ((b.cells[0] && b.cells[0].label) || '').toLowerCase();
+    return la.localeCompare(lb);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Seed guard
 // ---------------------------------------------------------------------------
@@ -104,7 +114,7 @@ app.get('/api/pages', (req, res) => {
           title: section.title || '',
           columnHeaders: section.columnHeaders || [],
           order: section.order,
-          rows: (section.rows || []).map(row => ({
+          rows: orderedRows(section).map(row => ({
             id: row.id,
             cells: (row.cells || []).map(cell => ({
               label: cell.label || '',
@@ -238,7 +248,7 @@ app.delete('/api/admin/pages/:id', authMiddleware, (req, res) => {
 // ---------------------------------------------------------------------------
 
 app.post('/api/admin/pages/:pageId/sections', authMiddleware, (req, res) => {
-  const { title, columnHeaders, order } = req.body || {};
+  const { title, columnHeaders, order, autoSort } = req.body || {};
   const data = readData();
   const page = data.pages.find(p => p.id === req.params.pageId);
   if (!page) return res.status(404).json({ error: 'Page not found' });
@@ -248,6 +258,7 @@ app.post('/api/admin/pages/:pageId/sections', authMiddleware, (req, res) => {
     title: title || '',
     columnHeaders: Array.isArray(columnHeaders) ? columnHeaders : [],
     order: parseInt(order) || maxOrder + 1,
+    autoSort: !!autoSort,
     rows: []
   };
   page.sections = page.sections || [];
@@ -256,16 +267,33 @@ app.post('/api/admin/pages/:pageId/sections', authMiddleware, (req, res) => {
   res.status(201).json(section);
 });
 
+// Must be registered before the /:sectionId route below, or "reorder" would be
+// captured as a sectionId by that route instead.
+app.put('/api/admin/pages/:pageId/sections/reorder', authMiddleware, (req, res) => {
+  const { orderedIds } = req.body || {};
+  if (!Array.isArray(orderedIds)) return res.status(400).json({ error: 'orderedIds array required' });
+  const data = readData();
+  const page = data.pages.find(p => p.id === req.params.pageId);
+  if (!page) return res.status(404).json({ error: 'Page not found' });
+  const sectionMap = Object.fromEntries((page.sections || []).map(s => [s.id, s]));
+  const reordered = orderedIds.filter(id => sectionMap[id]).map(id => sectionMap[id]);
+  reordered.forEach((s, i) => { s.order = i + 1; });
+  page.sections = reordered;
+  writeData(data);
+  res.json({ success: true });
+});
+
 app.put('/api/admin/pages/:pageId/sections/:sectionId', authMiddleware, (req, res) => {
   const data = readData();
   const page = data.pages.find(p => p.id === req.params.pageId);
   if (!page) return res.status(404).json({ error: 'Page not found' });
   const section = (page.sections || []).find(s => s.id === req.params.sectionId);
   if (!section) return res.status(404).json({ error: 'Section not found' });
-  const { title, columnHeaders, order } = req.body || {};
+  const { title, columnHeaders, order, autoSort } = req.body || {};
   if (title !== undefined) section.title = title;
   if (columnHeaders !== undefined) section.columnHeaders = Array.isArray(columnHeaders) ? columnHeaders : [];
   if (order !== undefined) section.order = parseInt(order);
+  if (autoSort !== undefined) section.autoSort = !!autoSort;
   writeData(data);
   res.json(section);
 });
@@ -286,7 +314,7 @@ app.delete('/api/admin/pages/:pageId/sections/:sectionId', authMiddleware, (req,
 // ---------------------------------------------------------------------------
 
 app.post('/api/admin/pages/:pageId/sections/:sectionId/rows', authMiddleware, (req, res) => {
-  const { cells } = req.body || {};
+  const { cells, insertAfter } = req.body || {};
   const data = readData();
   const page = data.pages.find(p => p.id === req.params.pageId);
   if (!page) return res.status(404).json({ error: 'Page not found' });
@@ -297,9 +325,30 @@ app.post('/api/admin/pages/:pageId/sections/:sectionId/rows', authMiddleware, (r
     cells: Array.isArray(cells) ? cells.map(c => ({ label: c.label || '', url: c.url || '' })) : []
   };
   section.rows = section.rows || [];
-  section.rows.push(row);
+  const insertIdx = insertAfter ? section.rows.findIndex(r => r.id === insertAfter) : -1;
+  if (insertIdx !== -1) {
+    section.rows.splice(insertIdx + 1, 0, row);
+  } else {
+    section.rows.push(row);
+  }
   writeData(data);
   res.status(201).json(row);
+});
+
+// Must be registered before the /:rowId route below, or "reorder" would be
+// captured as a rowId by that route instead.
+app.put('/api/admin/pages/:pageId/sections/:sectionId/rows/reorder', authMiddleware, (req, res) => {
+  const { orderedIds } = req.body || {};
+  if (!Array.isArray(orderedIds)) return res.status(400).json({ error: 'orderedIds array required' });
+  const data = readData();
+  const page = data.pages.find(p => p.id === req.params.pageId);
+  if (!page) return res.status(404).json({ error: 'Page not found' });
+  const section = (page.sections || []).find(s => s.id === req.params.sectionId);
+  if (!section) return res.status(404).json({ error: 'Section not found' });
+  const rowMap = Object.fromEntries((section.rows || []).map(r => [r.id, r]));
+  section.rows = orderedIds.filter(id => rowMap[id]).map(id => rowMap[id]);
+  writeData(data);
+  res.json({ success: true });
 });
 
 app.put('/api/admin/pages/:pageId/sections/:sectionId/rows/:rowId', authMiddleware, (req, res) => {
@@ -327,24 +376,6 @@ app.delete('/api/admin/pages/:pageId/sections/:sectionId/rows/:rowId', authMiddl
   const idx = (section.rows || []).findIndex(r => r.id === req.params.rowId);
   if (idx === -1) return res.status(404).json({ error: 'Row not found' });
   section.rows.splice(idx, 1);
-  writeData(data);
-  res.json({ success: true });
-});
-
-// ---------------------------------------------------------------------------
-// Admin — Row reordering
-// ---------------------------------------------------------------------------
-
-app.put('/api/admin/pages/:pageId/sections/:sectionId/rows/reorder', authMiddleware, (req, res) => {
-  const { orderedIds } = req.body || {};
-  if (!Array.isArray(orderedIds)) return res.status(400).json({ error: 'orderedIds array required' });
-  const data = readData();
-  const page = data.pages.find(p => p.id === req.params.pageId);
-  if (!page) return res.status(404).json({ error: 'Page not found' });
-  const section = (page.sections || []).find(s => s.id === req.params.sectionId);
-  if (!section) return res.status(404).json({ error: 'Section not found' });
-  const rowMap = Object.fromEntries((section.rows || []).map(r => [r.id, r]));
-  section.rows = orderedIds.filter(id => rowMap[id]).map(id => rowMap[id]);
   writeData(data);
   res.json({ success: true });
 });
