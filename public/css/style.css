@@ -310,6 +310,24 @@ body {
 
 .section-block td.empty-cell { color: var(--text-light); }
 
+.health-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: var(--text-light);
+}
+.health-dot.health-pending { opacity: 0.4; animation: health-pulse 1.1s ease-in-out infinite; }
+.health-dot.health-up { background: #22c55e; box-shadow: 0 0 4px rgba(34,197,94,0.55); }
+.health-dot.health-down { background: #ef4444; }
+
+@keyframes health-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.7; }
+}
+
 /* highlight matched text */
 mark {
   background: rgba(245,158,11,0.22);

@@ -3,6 +3,8 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
+const https = require('https');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
@@ -46,6 +48,22 @@ function sanitizeUrl(url) {
   const t = url.trim();
   if (t === '' || t === '#') return t;
   return (t.startsWith('http://') || t.startsWith('https://')) ? t : '';
+}
+
+function checkUrl(url, timeoutMs = 3000) {
+  return new Promise(resolve => {
+    let parsed;
+    try { parsed = new URL(url); } catch { return resolve(false); }
+    const lib = parsed.protocol === 'https:' ? https : http;
+    const req = lib.request(url, { method: 'GET', timeout: timeoutMs }, res => {
+      res.destroy();
+      resolve(true);
+    });
+    req.on('timeout', () => req.destroy());
+    req.on('error', () => resolve(false));
+    req.on('close', () => resolve(false));
+    req.end();
+  });
 }
 
 function orderedRows(section) {
@@ -128,6 +146,24 @@ app.get('/api/pages', (req, res) => {
 
 app.get('/api/config', (req, res) => {
   res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+});
+
+app.post('/api/health-check', async (req, res) => {
+  const { urls } = req.body || {};
+  if (!Array.isArray(urls)) return res.status(400).json({ error: 'urls array required' });
+  const unique = [...new Set(urls.map(sanitizeUrl).filter(u => u.startsWith('http')))].slice(0, 200);
+
+  const results = {};
+  const CONCURRENCY = 20;
+  let next = 0;
+  async function worker() {
+    while (next < unique.length) {
+      const url = unique[next++];
+      results[url] = await checkUrl(url);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, unique.length) }, worker));
+  res.json(results);
 });
 
 // ---------------------------------------------------------------------------

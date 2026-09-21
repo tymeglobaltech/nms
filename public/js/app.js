@@ -5,6 +5,7 @@ let currentPageId = null;
 let authToken = sessionStorage.getItem('nms_token') || null;
 
 const SEARCHABLE_SLUGS = new Set(['voice-gates', 'operators']);
+const HEALTH_CHECK_SECTIONS = new Set(['vg-fpbx']);
 
 async function apiFetch(url, opts = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -167,6 +168,13 @@ function showPage(pageId) {
         const cell = row.cells[i] || { label: '', url: '' };
         const td = document.createElement('td');
         if (cell.label && cell.url) {
+          if (HEALTH_CHECK_SECTIONS.has(section.id)) {
+            const dot = document.createElement('span');
+            dot.className = 'health-dot health-pending';
+            dot.title = 'Checking…';
+            dot.dataset.url = cell.url;
+            td.appendChild(dot);
+          }
           const a = document.createElement('a');
           a.href = cell.url;
           a.textContent = cell.label;
@@ -187,6 +195,39 @@ function showPage(pageId) {
 
     block.appendChild(table);
     content.appendChild(block);
+
+    if (HEALTH_CHECK_SECTIONS.has(section.id)) {
+      runHealthChecks(block);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Health checks
+// ---------------------------------------------------------------------------
+
+async function runHealthChecks(block) {
+  const dots = [...block.querySelectorAll('.health-dot')];
+  const urls = [...new Set(dots.map(d => d.dataset.url))];
+  if (urls.length === 0) return;
+
+  let results = {};
+  try {
+    results = await apiFetch('/api/health-check', {
+      method: 'POST',
+      body: JSON.stringify({ urls })
+    });
+  } catch {
+    // Leave dots pending if the check itself failed to run.
+    return;
+  }
+
+  if (!document.body.contains(block)) return; // page navigated away meanwhile
+
+  dots.forEach(dot => {
+    const up = !!results[dot.dataset.url];
+    dot.className = 'health-dot ' + (up ? 'health-up' : 'health-down');
+    dot.title = up ? 'Reachable' : 'Unreachable';
   });
 }
 
