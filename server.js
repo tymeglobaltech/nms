@@ -50,17 +50,24 @@ function sanitizeUrl(url) {
   return (t.startsWith('http://') || t.startsWith('https://')) ? t : '';
 }
 
-function checkUrl(url, timeoutMs = 3000) {
+function checkUrl(url, timeoutMs = 12000) {
   return new Promise(resolve => {
     let parsed;
     try { parsed = new URL(url); } catch { return resolve(false); }
     const lib = parsed.protocol === 'https:' ? https : http;
-    const req = lib.request(url, { method: 'GET', timeout: timeoutMs }, res => {
+    const options = { method: 'GET', timeout: timeoutMs };
+    // FPBX and similar admin UIs often use self-signed certs — don't let
+    // cert validation report a reachable server as "down".
+    if (lib === https) options.rejectUnauthorized = false;
+    const req = lib.request(url, options, res => {
       res.destroy();
       resolve(true);
     });
     req.on('timeout', () => req.destroy());
-    req.on('error', () => resolve(false));
+    req.on('error', err => {
+      console.warn(`[health-check] ${url} failed: ${err.code || err.message}`);
+      resolve(false);
+    });
     req.on('close', () => resolve(false));
     req.end();
   });
